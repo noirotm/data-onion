@@ -1,5 +1,5 @@
 use nom::branch::alt;
-use nom::bytes::complete::{tag, take, take_while_m_n};
+use nom::bytes::complete::{tag, take_while_m_n};
 use nom::character::complete::multispace0;
 use nom::combinator::{all_consuming, map, map_res};
 use nom::multi::{many0, many_m_n};
@@ -11,19 +11,17 @@ use std::fmt::{Display, Formatter};
 
 #[derive(Debug)]
 pub enum DecodeError {
-    InvalidDelimiter,
     InvalidCharacter(char),
-    MisplacedCharacter,
     ParseError(Box<dyn Error>),
+    Misc(String),
 }
 
 impl Display for DecodeError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            DecodeError::InvalidDelimiter => write!(f, "invalid delimiter"),
             DecodeError::InvalidCharacter(c) => write!(f, "invalid character: {}", c),
-            DecodeError::MisplacedCharacter => write!(f, "misplaced character"),
             DecodeError::ParseError(e) => write!(f, "{}", e),
+            DecodeError::Misc(s) => write!(f, "{}", s),
         }
     }
 }
