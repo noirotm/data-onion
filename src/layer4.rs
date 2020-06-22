@@ -1,5 +1,5 @@
 use packet::ip::Protocol;
-use packet::{ip, udp};
+use packet::{ip, udp, Packet};
 use std::error::Error;
 use std::net::Ipv4Addr;
 
@@ -8,8 +8,6 @@ pub fn parse_ip_payload(b: &[u8]) -> Result<Vec<u8>, Box<dyn Error>> {
     let mut result = vec![];
 
     while let Ok(ipv4_packet) = ip::v4::Packet::new(stream) {
-        let data_len = ipv4_packet.length() as usize - (20 + 8);
-
         // verify checksum
         let ck = ipv4_packet.checksum();
         let actual_ck = ip::v4::checksum(&stream[..20]);
@@ -29,37 +27,25 @@ pub fn parse_ip_payload(b: &[u8]) -> Result<Vec<u8>, Box<dyn Error>> {
             ignore = true;
         }
 
-        stream = &stream[20..];
-
-        let udp_packet = udp::Packet::new(stream)?;
-
-        dbg!(data_len);
-        dbg!(udp_packet.length() - 8);
+        let udp_packet = udp::Packet::new(ipv4_packet.payload())?;
 
         // verify checksum
-        let ck = dbg!(udp_packet.checksum());
-        let actual_ck = dbg!(checksum(
-            &ip::Packet::V4(ipv4_packet),
-            &stream[..8 + data_len]
-        ));
+        let ck = udp_packet.checksum();
+        let actual_ck = checksum(&ip::Packet::V4(ipv4_packet), ipv4_packet.payload());
         if ck != actual_ck {
             ignore = true;
         }
 
         // port verification
-        let port = udp_packet.destination();
-        if port != 42069 {
+        if udp_packet.destination() != 42069 {
             ignore = true;
         }
 
-        stream = &stream[8..];
-
-        let data = &stream[..data_len];
         if !ignore {
-            result.extend_from_slice(data);
+            result.extend_from_slice(udp_packet.payload());
         }
 
-        stream = &stream[data_len..];
+        stream = &stream[ipv4_packet.length() as usize..];
     }
 
     Ok(result)
