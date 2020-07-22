@@ -1,6 +1,9 @@
 use aes::Aes256;
-use block_modes::block_padding::{NoPadding, Pkcs7};
-use block_modes::{BlockMode, Cbc, Ecb};
+use aes_ctr::stream_cipher::generic_array::GenericArray;
+use aes_ctr::stream_cipher::{NewStreamCipher, SyncStreamCipher};
+use aes_ctr::Aes256Ctr;
+use block_modes::block_padding::NoPadding;
+use block_modes::{BlockMode, Ecb};
 use byteorder::{BigEndian, ReadBytesExt};
 use nom::lib::std::iter::repeat_with;
 use std::error::Error;
@@ -17,9 +20,14 @@ pub fn decode_aes_payload(b: &[u8]) -> Result<Vec<u8>, Box<dyn Error>> {
     let decrypted_key = unwrap_key(kek, wrapped_key)?;
 
     // decrypt the payload
-    type Aes256Cbc = Cbc<Aes256, block_modes::block_padding::ZeroPadding>;
-    let cipher = Aes256Cbc::new_var(&decrypted_key, iv)?;
-    cipher.decrypt_vec(payload).map_err(|e| e.into())
+    let key = GenericArray::from_slice(&decrypted_key);
+    let nonce = GenericArray::from_slice(iv);
+    let mut cipher = Aes256Ctr::new(&key, &nonce);
+    let mut data = Vec::from(payload);
+    cipher
+        .try_apply_keystream(&mut data)
+        .map(|_| data)
+        .map_err(|e| format!("{}", e).into())
 }
 
 fn unwrap_key(kek: &[u8], wrapped_key: &[u8]) -> Result<Vec<u8>, Box<dyn Error>> {
