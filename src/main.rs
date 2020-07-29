@@ -4,6 +4,7 @@ use crate::layer2::parse_parity_buffer;
 use crate::layer3::decode_xor_encoded_payload;
 use crate::layer4::parse_ip_payload;
 use crate::layer5::decode_aes_payload;
+use crate::layer6::run_payload_program;
 use std::error::Error;
 use std::fs::File;
 use std::io;
@@ -16,6 +17,7 @@ mod layer2;
 mod layer3;
 mod layer4;
 mod layer5;
+mod layer6;
 
 fn load_layer(p: impl AsRef<Path>) -> io::Result<String> {
     let mut f = File::open(p)?;
@@ -75,6 +77,11 @@ fn solve_layer05(s: &str) -> Result<Vec<u8>, DecodeError> {
     decode_aes_payload(&buffer).map_err(|e| DecodeError::ParseError(e))
 }
 
+fn solve_layer06(s: &str) -> Result<Vec<u8>, DecodeError> {
+    let buffer = decode_ascii85_str(s)?;
+    Ok(run_payload_program(&buffer))
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
     solve_layer(0, solve_layer00)?;
     solve_layer(1, solve_layer01)?;
@@ -82,6 +89,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     solve_layer(3, solve_layer03)?;
     solve_layer(4, solve_layer04)?;
     solve_layer(5, solve_layer05)?;
+    solve_layer(6, solve_layer06)?;
 
     Ok(())
 }
