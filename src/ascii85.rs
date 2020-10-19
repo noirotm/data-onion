@@ -77,14 +77,13 @@ pub fn decode_ascii85_str(b: &str) -> Result<Vec<u8>, DecodeError> {
 
 fn decode_sequence(b: &[u8]) -> Result<Vec<u8>, DecodeError> {
     debug_assert!(!b.is_empty());
-    let padding = 5 - b.len();
 
     let vals = (0..5)
         .map(|n| {
-            let c = b.get(n).cloned().unwrap_or(b'u');
+            let c = b.get(n).unwrap_or(&b'u');
             c.checked_sub(33)
                 .map(|n| n as u32)
-                .ok_or(DecodeError::InvalidCharacter(c as char))
+                .ok_or(DecodeError::InvalidCharacter(*c as char))
         })
         .collect::<Result<Vec<_>, _>>()?;
 
@@ -95,7 +94,7 @@ fn decode_sequence(b: &[u8]) -> Result<Vec<u8>, DecodeError> {
     let bytes = n.to_be_bytes();
 
     // truncate output if necessary
-    let bytes = &bytes[0..(4 - padding)];
+    let bytes = &bytes[0..(b.len() - 1)];
 
     Ok(Vec::from(bytes))
 }
@@ -119,6 +118,14 @@ mod tests {
         let s = String::from_utf8(res).unwrap();
 
         assert_eq!(s, DECODED);
+    }
+
+    #[test]
+    fn test_invalid_character() {
+        const ENCODED: &str = "<~àç_èé'(è~>";
+        let res = decode_ascii85_str(ENCODED);
+
+        assert!(res.is_err());
     }
 
     #[test]

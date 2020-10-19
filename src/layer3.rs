@@ -1,6 +1,4 @@
 /// XOR encryption is very weak against repeating sequences.
-/// The encrypted payload will start with `==[ Layer 4/5: `
-/// which immediately gives us the 15 first bytes of the key.
 /// At some point, there will be the sequence:
 ///
 /// `==[ Payload ]===============================================`
@@ -40,7 +38,7 @@ pub fn decode_xor_encoded_payload(b: &[u8]) -> Option<Vec<u8>> {
     Some(xor(&key, b))
 }
 
-// decode sequence if "=" bytes
+// decode sequence of "=" bytes
 fn get_key_from_equal_bytes(b: &[u8]) -> Vec<u8> {
     let s = String::from("================================");
     let c = s.as_bytes();
