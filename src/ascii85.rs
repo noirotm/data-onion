@@ -1,28 +1,23 @@
 use nom::branch::alt;
-use nom::bytes::complete::{tag, take_while_m_n};
-use nom::character::complete::multispace0;
+use nom::bytes::complete::tag;
+use nom::character::complete::{multispace0, satisfy};
 use nom::combinator::{all_consuming, map, map_res};
 use nom::multi::{many0, many_m_n};
 use nom::sequence::{delimited, preceded, terminated};
+use nom::Finish;
 use nom::IResult;
 use std::error::Error;
 use std::fmt;
 use std::fmt::{Display, Formatter};
 
 #[derive(Debug)]
-pub enum DecodeError {
-    InvalidCharacter(char),
-    ParseError(Box<dyn Error>),
-    Misc(String),
+pub struct DecodeError {
+    error: String,
 }
 
 impl Display for DecodeError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self {
-            DecodeError::InvalidCharacter(c) => write!(f, "invalid character: {}", c),
-            DecodeError::ParseError(e) => write!(f, "{}", e),
-            DecodeError::Misc(s) => write!(f, "{}", s),
-        }
+        write!(f, "{}", self.error)
     }
 }
 
@@ -36,10 +31,8 @@ fn ws(i: &str) -> IResult<&str, &str> {
     multispace0(i)
 }
 
-fn chr(i: &str) -> IResult<&str, u8> {
-    map(preceded(ws, take_while_m_n(1, 1, is_ascii85_value)), |b| {
-        b.bytes().next().unwrap()
-    })(i)
+fn chr(i: &str) -> IResult<&str, char> {
+    preceded(ws, satisfy(is_ascii85_value))(i)
 }
 
 fn z(i: &str) -> IResult<&str, Vec<u8>> {
@@ -71,19 +64,25 @@ fn parse_ascii85(i: &str) -> IResult<&str, Vec<u8>> {
 
 pub fn decode_ascii85_str(b: &str) -> Result<Vec<u8>, DecodeError> {
     parse_ascii85(b)
-        .map_err(|e| DecodeError::ParseError(e.to_owned().into()))
+        .finish()
+        .map_err(|e| DecodeError {
+            error: e.to_string(),
+        })
         .map(|(_, v)| v)
 }
 
-fn decode_sequence(b: &[u8]) -> Result<Vec<u8>, DecodeError> {
+fn decode_sequence(b: &[char]) -> Result<Vec<u8>, DecodeError> {
     debug_assert!(!b.is_empty());
 
     let vals = (0..5)
         .map(|n| {
-            let c = b.get(n).unwrap_or(&b'u');
-            c.checked_sub(33)
+            let c = b.get(n).unwrap_or(&'u');
+            (*c as u8)
+                .checked_sub(33)
                 .map(|n| n as u32)
-                .ok_or(DecodeError::InvalidCharacter(*c as char))
+                .ok_or(DecodeError {
+                    error: format!("Invalid character '{}'", *c),
+                })
         })
         .collect::<Result<Vec<_>, _>>()?;
 
@@ -121,6 +120,16 @@ mod tests {
     }
 
     #[test]
+    fn test_decode_z() {
+        const ENCODED: &str = "<~z~>";
+        const DECODED: &[u8] = &[0, 0, 0, 0];
+
+        let res = decode_ascii85_str(ENCODED).unwrap();
+
+        assert_eq!(res.as_slice(), DECODED);
+    }
+
+    #[test]
     fn test_invalid_character() {
         const ENCODED: &str = "<~àç_èé'(è~>";
         let res = decode_ascii85_str(ENCODED);
@@ -131,13 +140,13 @@ mod tests {
     #[test]
     fn test_decode_sequence() {
         assert_eq!(
-            decode_sequence(&[b'9', b'j', b'q', b'o', b'^']).unwrap(),
+            decode_sequence(&['9', 'j', 'q', 'o', '^']).unwrap(),
             vec![b'M', b'a', b'n', b' ']
         );
     }
 
     #[test]
     fn test_decode_sequence_padded() {
-        assert_eq!(decode_sequence(&[b'/', b'c']).unwrap(), vec![b'.']);
+        assert_eq!(decode_sequence(&['/', 'c']).unwrap(), vec![b'.']);
     }
 }
