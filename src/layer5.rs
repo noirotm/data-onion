@@ -1,15 +1,14 @@
+use aes::cipher::generic_array::GenericArray;
+use aes::cipher::{block_padding::NoPadding, BlockDecryptMut, KeyInit, KeyIvInit, StreamCipher};
 use aes::Aes256;
-use aes_ctr::stream_cipher::generic_array::GenericArray;
-use aes_ctr::stream_cipher::{NewStreamCipher, SyncStreamCipher};
-use aes_ctr::Aes256Ctr;
-use block_modes::block_padding::NoPadding;
-use block_modes::{BlockMode, Ecb};
 use byteorder::{BigEndian, ReadBytesExt};
 use nom::lib::std::iter::repeat_with;
 use std::error::Error;
 use std::io::Cursor;
 
 pub fn decode_aes_payload(b: &[u8]) -> Result<Vec<u8>, Box<dyn Error>> {
+    type Aes256Ctr = ctr::Ctr128BE<Aes256>;
+
     let kek = &b[0..32];
     let _wkiv = &b[32..40];
     let wrapped_key = &b[40..80];
@@ -22,7 +21,7 @@ pub fn decode_aes_payload(b: &[u8]) -> Result<Vec<u8>, Box<dyn Error>> {
     // decrypt the payload
     let key = GenericArray::from_slice(&decrypted_key);
     let nonce = GenericArray::from_slice(iv);
-    let mut cipher = Aes256Ctr::new(&key, &nonce);
+    let mut cipher = Aes256Ctr::new(key, nonce);
     let mut data = Vec::from(payload);
     cipher
         .try_apply_keystream(&mut data)
@@ -33,7 +32,7 @@ pub fn decode_aes_payload(b: &[u8]) -> Result<Vec<u8>, Box<dyn Error>> {
 fn unwrap_key(kek: &[u8], wrapped_key: &[u8]) -> Result<Vec<u8>, Box<dyn Error>> {
     // 1 byte for IV + 5 * 8 bytes in the key
     // use AES codebook = ECB, don't unpad!
-    type Aes256Ecb = Ecb<Aes256, NoPadding>;
+    type Aes256Ecb = ecb::Decryptor<Aes256>;
 
     let mut c = Cursor::new(wrapped_key);
     let mut a = c.read_u64::<BigEndian>()?;
@@ -49,8 +48,8 @@ fn unwrap_key(kek: &[u8], wrapped_key: &[u8]) -> Result<Vec<u8>, Box<dyn Error>>
             let mut v = Vec::from(v.to_be_bytes());
             v.extend_from_slice(&r[i - 1].to_be_bytes());
 
-            let cipher = Aes256Ecb::new_var(kek, Default::default())?;
-            let b = cipher.decrypt_vec(&v)?;
+            let cipher = Aes256Ecb::new(kek.into());
+            let b = cipher.decrypt_padded_vec_mut::<NoPadding>(&v)?;
 
             let mut c = Cursor::new(&b);
 

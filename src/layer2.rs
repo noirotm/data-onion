@@ -1,5 +1,4 @@
-use bitvec::order::Msb0;
-use bitvec::vec::BitVec;
+use bitvec::prelude::*;
 
 fn correct_byte(b: u8) -> Option<u8> {
     let parity_bit = b & 1;
@@ -13,7 +12,7 @@ fn correct_byte(b: u8) -> Option<u8> {
 }
 
 pub fn parse_parity_buffer(b: &[u8]) -> Vec<u8> {
-    let mut bb = BitVec::<Msb0, _>::new();
+    let mut bb = bitvec![u8, Msb0;];
     for &byte in b {
         if let Some(mut ab) = correct_byte(byte) {
             ab = ab.reverse_bits();
