@@ -24,7 +24,7 @@ impl Display for DecodeError {
 impl Error for DecodeError {}
 
 fn is_ascii85_value(c: char) -> bool {
-    c >= '!' && c <= 'u'
+    ('!'..='u').contains(&c)
 }
 
 fn ws(i: &str) -> IResult<&str, &str> {

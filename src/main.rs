@@ -9,9 +9,9 @@ use nom::lib::std::fmt::Formatter;
 use std::error::Error;
 use std::fmt::Display;
 use std::fs::File;
-use std::io::{Read, Write};
+use std::io::Write;
 use std::path::Path;
-use std::{fmt, io};
+use std::{fmt, fs, io};
 
 mod ascii85;
 mod layer1;
@@ -46,13 +46,6 @@ impl From<Box<dyn Error>> for ProblemError {
 
 impl Error for ProblemError {}
 
-fn load_layer(p: impl AsRef<Path>) -> io::Result<String> {
-    let mut f = File::open(p)?;
-    let mut s = String::new();
-    f.read_to_string(&mut s)?;
-    Ok(s)
-}
-
 fn extract_payload(s: &str) -> Option<&str> {
     const DELIM: &str = "==[ Payload ]===============================================";
     s.find(DELIM).map(|i| &s[i + DELIM.len()..])
@@ -67,9 +60,9 @@ fn solve_layer<F>(n: u8, f: F) -> Result<(), Box<dyn Error>>
 where
     F: Fn(&str) -> Result<Vec<u8>, ProblemError>,
 {
-    let s = load_layer(format!("layers/0{}.txt", n))?;
+    let s = fs::read_to_string(format!("layers/0{}.txt", n))?;
     let p = extract_payload(&s).ok_or("Unable to extract payload")?;
-    let b = f(&p).map_err(|e| e.to_string())?;
+    let b = f(p).map_err(|e| e.to_string())?;
     save_layer(format!("layers/0{}.txt", n + 1), &b)?;
     Ok(())
 }
