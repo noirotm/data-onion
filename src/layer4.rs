@@ -1,6 +1,7 @@
 use packet::ip::Protocol;
 use packet::{ip, udp, Packet};
 use std::error::Error;
+use std::io::Seek;
 use std::net::Ipv4Addr;
 
 pub fn parse_ip_payload(b: &[u8]) -> Result<Vec<u8>, Box<dyn Error>> {
@@ -78,7 +79,7 @@ fn checksum<B: AsRef<[u8]>>(ip: &ip::Packet<B>, buffer: &[u8]) -> u16 {
     };
 
     let mut result = 0u32;
-    let mut buffer = Cursor::new(buffer);
+    let mut reader = Cursor::new(buffer);
     let mut prefix = match *ip {
         ip::Packet::V4(_) => Cursor::new(&prefix[0..12]),
         ip::Packet::V6(_) => Cursor::new(&prefix[0..40]),
@@ -92,9 +93,9 @@ fn checksum<B: AsRef<[u8]>>(ip: &ip::Packet<B>, buffer: &[u8]) -> u16 {
         }
     }
 
-    while let Ok(value) = buffer.read_u16::<BigEndian>() {
+    while let Ok(value) = reader.read_u16::<BigEndian>() {
         // Skip checksum field.
-        if buffer.position() == 8 {
+        if reader.position() == 8 {
             continue;
         }
 
@@ -105,14 +106,19 @@ fn checksum<B: AsRef<[u8]>>(ip: &ip::Packet<B>, buffer: &[u8]) -> u16 {
         }
     }
 
-    if let Ok(value) = buffer.read_u8() {
-        // if we have a trailing byte, make a padded 16-bit value
-        let value = (value as u16) << 8;
+    // if buffer size is odd, we go back one byte and read it
+    if buffer.len() % 2 == 1 {
+        let _ = reader.seek_relative(-1);
 
-        result += u32::from(value);
+        if let Ok(value) = reader.read_u8() {
+            // if we have a trailing byte, make a padded 16-bit value
+            let value = (value as u16) << 8;
 
-        if result > 0xffff {
-            result -= 0xffff;
+            result += u32::from(value);
+
+            if result > 0xffff {
+                result -= 0xffff;
+            }
         }
     }
 
